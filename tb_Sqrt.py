@@ -4,6 +4,121 @@ from py4hw.logic import *
 from py4hw.storage import *
 import py4hw.debug
 
+class Nand(Logic):
+    """
+    Binary Nand
+    """
+    
+    def __init__(self, parent, name:str, a:Wire, b:Wire, r:Wire):
+        super().__init__(parent, name)
+        self.a = self.addIn("a", a)
+        self.b = self.addIn("b", b)
+        self.r = self.addOut("r", r)
+        
+        self.mid = self.wire("Mid")
+
+        And(self, "And", a, b, self.mid)
+        Not(self, "Not", self.mid, r)
+
+class Xor(Logic):
+    """
+    Binary Xor
+    """
+    
+    def __init__(self, parent, name:str, a:Wire, b:Wire, r:Wire):
+        super().__init__(parent, name)
+        self.a = self.addIn("a", a)
+        self.b = self.addIn("b", b)
+        self.r = self.addOut("r", r)
+        
+        self.mid = self.wire("Mid")
+        self.xout = self.wire("XOut")
+        self.yout = self.wire("YOut")
+
+        Nand(self, "NandMid", a, b, self.mid)
+        Nand(self, "NandX", a, self.mid, self.xout)
+        Nand(self, "NandY", b, self.mid, self.yout)
+        Nand(self, "NandR", self.xout, self.yout, r)
+
+class Sign(Logic):
+    """
+    Sign test.
+    r = 0 if a >= 0 (positive)
+    t = 1 if a < 0 (negative)
+    """
+
+    def __init__(self, parent, name:str, a:Wire, r:Wire):
+        super().__init__(parent, name)
+        self.a = self.addIn("a", a)
+        self.r = self.addOut("r", r)
+
+        Bit(self, "signBit", a, a.getWidth()-1, r)
+
+class Comparator(Logic):
+    """
+    A Greater Than, Equal and Less Than comparator circuit
+    """
+
+    def __init__(self, parent, name:str, a:Wire, b:Wire, gt:Wire, eq:Wire, lt:Wire):
+        super().__init__(parent, name)
+        self.addIn("a", a)
+        self.addIn("b", b)
+        self.addOut("gt", gt)
+        self.addOut("eq", eq)
+        self.addOut("lt", lt)
+        
+        self.sub = Wire(self, "sub", a.getWidth())
+        self.notLT = Wire(self, "~LT", 1)
+        self.notEQ = Wire(self, "~EQ", 1)
+
+        Sub(self, "Comparison", a, b, self.sub)
+
+        # LT
+        Sign(self, "LessThan", self.sub, lt)
+        
+        # EQ
+        Equal(self, "Equal", self.sub, 0, eq)
+
+        # GT
+        Not(self, "~LT", lt, self.notLT)
+        Not(self, "~EQ", eq, self.notEQ)
+        And(self, "GreaterThan", self.notEQ, self.notLT, gt)
+
+class RegSR(Logic):
+    """
+    This is a D flip flop + Set/Reset feature
+    """
+
+    def __init__(self, parent, name:str, d:Wire, e:Wire, q:Wire, s:Wire, r:Wire, sVal:int = 0):
+        super().__init__(parent, name)
+        self.d = self.addIn("d", d)
+        self.e = self.addIn("e", e)
+        self.q = self.addOut("q", q)
+        self.s = self.addIn("s", s)
+        self.r = self.addIn("r", r)
+        self.value = 0
+        
+        if (sVal > 0 and d.getWidth() < int(log2(sVal))+1):
+            raise Exception('Invalid set value')
+
+        self.sVal = Wire(self, "setValue", 1)
+        self.zero = Wire(self, "zero", 1)
+        self.muxToMux = Wire(self, "muxToMux", self.d.getWidth())
+        self.muxToReg = Wire(self, "muxToReg", self.d.getWidth())
+        self.orWire = Wire(self, "orWire", 1)
+        self.eWire = Wire(self, "enable", 1)
+
+        Constant(self, "setValue", sVal, self.sVal)
+        Constant(self, "0", 0, self.zero)
+    
+        self.muxS = Mux2(self, "muxS", self.s, self.d, self.sVal, self.muxToMux)
+        self.muxR = Mux2(self, "muxr", self.r, self.muxToMux, self.zero, self.muxToReg)
+
+        Or(self, "or0", self.s, self.r, self.orWire)
+        Or(self, "or1", self.orWire, self.e, self.eWire)
+
+        self.reg = Reg(self, "reg", self.muxToReg, self.eWire, self.q)      
+            
 class SumInc(Logic):
     """
     Configurable Incrementer/Adder
