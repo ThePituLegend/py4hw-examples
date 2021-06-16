@@ -3,6 +3,7 @@ from py4hw.base import *
 from py4hw.logic import *
 from py4hw.storage import *
 import py4hw.debug
+import nbwavedrom
 class RegSR(Logic):
     """
     This is a D flip flop + Set/Reset feature
@@ -20,23 +21,23 @@ class RegSR(Logic):
         if (sVal > 0 and d.getWidth() < int(log2(sVal))+1):
             raise Exception('Invalid set value')
 
-        self.sVal = Wire(self, "setValue", 1)
-        self.zero = Wire(self, "zero", 1)
-        self.muxToMux = Wire(self, "muxToMux", self.d.getWidth())
-        self.muxToReg = Wire(self, "muxToReg", self.d.getWidth())
-        self.orWire = Wire(self, "orWire", 1)
-        self.eWire = Wire(self, "enable", 1)
+        sValWire = Wire(self, "setValue", 1)
+        zero = Wire(self, "zero", 1)
+        muxToMux = Wire(self, "muxToMux", self.d.getWidth())
+        muxToReg = Wire(self, "muxToReg", self.d.getWidth())
+        orWire = Wire(self, "orWire", 1)
+        eWire = Wire(self, "enable", 1)
 
-        Constant(self, "setValue", sVal, self.sVal)
-        Constant(self, "0", 0, self.zero)
+        Constant(self, "setValue", sVal, sValWire)
+        Constant(self, "0", 0, zero)
     
-        self.muxS = Mux2(self, "muxS", self.s, self.d, self.sVal, self.muxToMux)
-        self.muxR = Mux2(self, "muxr", self.r, self.muxToMux, self.zero, self.muxToReg)
+        self.muxS = Mux2(self, "muxS", s, d, sValWire, muxToMux)
+        self.muxR = Mux2(self, "muxr", r, muxToMux, zero, muxToReg)
 
-        Or(self, "or0", self.s, self.r, self.orWire)
-        Or(self, "or1", self.orWire, self.e, self.eWire)
+        Or(self, "or0", s, r, orWire)
+        Or(self, "or1", orWire, e, eWire)
 
-        self.reg = Reg(self, "reg", self.muxToReg, self.eWire, self.q)      
+        self.reg = Reg(self, "reg", muxToReg, eWire, q)     
             
 class SumInc(Logic):
     """
@@ -53,13 +54,13 @@ class SumInc(Logic):
         self.sel = self.addIn("sum/inc", sel)
         self.r = self.addOut("r", r)
         
-        self.one = Wire(self, "one", 1)
-        self.muxOut = Wire(self, "muxOut", b.getWidth())
+        one = Wire(self, "one", 1)
+        muxOut = Wire(self, "muxOut", b.getWidth())
 
-        Constant(self, "1", 1, self.one)
+        Constant(self, "1", 1, one)
 
-        self.mux = Mux2(self, "mux", sel, self.one, b, self.muxOut)
-        self.add = Add(self, "add", a, self.muxOut, r)
+        self.mux = Mux2(self, "mux", sel, one, b, muxOut)
+        self.add = Add(self, "add", a, muxOut, r)
 
 class LEQ(Logic):
     """
@@ -75,13 +76,12 @@ class LEQ(Logic):
         self.b = self.addIn("b", b)
         self.c = self.addOut("c", c)
         
-        self.dummy = Wire(self, "", 1)
-        self.eq = Wire(self, "equal", 1)
-        self.lt = Wire(self, "less", 1)
+        dummy = Wire(self, "", 1)
+        eq = Wire(self, "equal", 1)
+        lt = Wire(self, "less", 1)
     
-        Comparator(self, "comparator", a, b, self.dummy, self.eq, self.lt)
-        Or(self, "or", self.eq, self.lt, c) 
-
+        Comparator(self, "comparator", a, b, dummy, eq, lt)
+        Or(self, "or", eq, lt, c)
 
 class ProcUnit(Logic):
     """
@@ -103,27 +103,27 @@ class ProcUnit(Logic):
         self.rootOut = self.addOut(rootOut.name, rootOut)
         self.c = self.addOut(c.name, c)
        
-        # Wires
-        self.BusA = Wire(self, "BusA", 32)
-        self.BusB = Wire(self, "BusB", 32)
+        # Wires (The ones we want to draw will remain as attributes)
         self.s2Mux = Wire(self, "s2Mux", 32)
         self.r2Mux = Wire(self, "r2Mux", 32)
-        self.zero = Wire(self, "zero", 1)
+        BusA = Wire(self, "BusA", 32)
+        BusB = Wire(self, "BusB", 32)
+        zero = Wire(self, "zero", 1)
 
         # Constants
-        Constant(self, "0", 0, self.zero)
+        Constant(self, "0", 0, zero)
 
         # Muxes
-        self.mux = Mux2(self, "muxA", self.sabA, self.s2Mux, self.r2Mux, self.BusA)
+        self.mux = Mux2(self, "muxA", sabA, self.s2Mux, self.r2Mux, BusA)
 
         # Registers
-        self.root = Reg(self, "Root", self.BusA, self.ld_root, self.rootOut)
-        self.s = RegSR(self, "S", self.BusB, self.ld_s, self.s2Mux, self.inic_rs, self.zero)
-        self.r = RegSR(self, "R", self.BusB, self.ld_r, self.r2Mux, self.zero, self.inic_rs)
+        self.root = Reg(self, "Root", BusA, ld_root, rootOut)
+        self.s = RegSR(self, "S", BusB, ld_s, self.s2Mux, inic_rs, zero)
+        self.r = RegSR(self, "R", BusB, ld_r, self.r2Mux, zero, inic_rs)
 
         # Logic Gates
-        self.sum = SumInc(self, "Sum/Inc", self.BusA, self.r2Mux, self.sum_inc, self.BusB)
-        self.comp = LEQ(self, "Comp", self.BusA, self.X, self.c)
+        self.sum = SumInc(self, "Sum/Inc", BusA, self.r2Mux, sum_inc, BusB)
+        self.comp = LEQ(self, "Comp", BusA, X, c)
 
 class CtrlUnit(Logic):
     """
@@ -145,75 +145,74 @@ class CtrlUnit(Logic):
         self.ld_root = self.addOut(ld_root.name, ld_root)
         self.fin = self.addOut(fin.name, fin)
         
-        # Wires
-        self.cmpOut = Wire(self, "cmpOut", 3)
-        self.startOut = Wire(self, "startOut", 3)
-        self.muxOut = Wire(self, "MuxOut", 3)
-
+        # Wires (The ones we want to draw will remain as attributes)
         self.current_state = Wire(self, "CurrentState", 3)
-
-        self.eWire = Wire(self, "enableWire", 1)
         
-        self.inic_rs_mid = Wire(self, "inic_rs_mid", 1)
-        self.ld_r_mid = Wire(self, "ld_r_mid", 1)
-        self.ld_s_mid = Wire(self, "ld_s_mid", 1)
-        self.ld_root_mid = Wire(self, "ld_root_mid", 1)
-        self.fin_mid = Wire(self, "fin_mid", 1)
+        cmpOut = Wire(self, "cmpOut", 3)
+        startOut = Wire(self, "startOut", 3)
+        muxOut = Wire(self, "MuxOut", 3)
+
+        eWire = Wire(self, "enableWire", 1)
+        
+        inic_rs_mid = Wire(self, "inic_rs_mid", 1)
+        ld_r_mid = Wire(self, "ld_r_mid", 1)
+        ld_s_mid = Wire(self, "ld_s_mid", 1)
+        ld_root_mid = Wire(self, "ld_root_mid", 1)
+        fin_mid = Wire(self, "fin_mid", 1)
 
         # Constants
-        self.one = Constant(self, "one", 1, self.eWire)
+        self.one = Constant(self, "one", 1, eWire)
 
         # Wire Bundles
-        self.state_wires = self.wires("state_wire", 8, 3)
-        for i, wire in enumerate(self.state_wires):
+        state_wires = self.wires("state_wire", 8, 3)
+        for i, wire in enumerate(state_wires):
             Constant(self, f"{i:b}", i, wire)
 
-        self.q = self.wires("q", 3, 1)
-        self.q_not = self.wires("qNot", 3, 1)
-        Bits(self, "state2q", self.current_state, self.q)
-        for i, wire in enumerate(self.q):
-            Not(self, f"not{i}", wire, self.q_not[i])
+        q = self.wires("q", 3, 1)
+        q_not = self.wires("qNot", 3, 1)
+        Bits(self, "state2q", self.current_state, q)
+        for i, wire in enumerate(q):
+            Not(self, f"not{i}", wire, q_not[i])
 
         # Muxes
-        self.cmpMux = Mux2(self, "cmpMux", self.c, 
-            self.state_wires[0b111], self.state_wires[0b011], self.cmpOut)
+        cmpMux = Mux2(self, "cmpMux", c, 
+            state_wires[0b111], state_wires[0b011], cmpOut)
 
-        self.startMux = Mux2(self, "startMux", self.inicio, 
-            self.state_wires[0b000], self.state_wires[0b001], self.startOut)
+        startMux = Mux2(self, "startMux", inicio, 
+            state_wires[0b000], state_wires[0b001], startOut)
 
-        self.muxIn = [self.startOut,
-                    self.state_wires[0b010],
-                    self.cmpOut,
-                    self.state_wires[0b100],
-                    self.state_wires[0b101],
-                    self.state_wires[0b110],
-                    self.state_wires[0b010],
-                    self.state_wires[0b000]]
-        self.mux = Mux(self, "MainMux", self.current_state, self.muxIn, self.muxOut)
+        muxIn = [startOut,
+                state_wires[0b010],
+                cmpOut,
+                state_wires[0b100],
+                state_wires[0b101],
+                state_wires[0b110],
+                state_wires[0b010],
+                state_wires[0b000]]
+        mux = Mux(self, "MainMux", self.current_state, muxIn, muxOut)
 
         # Registers
-        self.state_reg = Reg(self, "Estado", self.muxOut, self.eWire, self.current_state)
+        state_reg = Reg(self, "Estado", muxOut, eWire, self.current_state)
 
         # Logic Gates
-        And(self, "inic_rs0", self.q_not[2], self.q_not[1], self.inic_rs_mid)
-        And(self, "inic_rs1", self.inic_rs_mid, self.q[0], self.inic_rs)
+        And(self, "inic_rs0", q_not[2], q_not[1], inic_rs_mid)
+        And(self, "inic_rs1", inic_rs_mid, q[0], inic_rs)
 
-        Or(self, "ld_s0", self.q_not[1], self.q_not[0], self.ld_s_mid)
-        And(self, "ld_s1", self.ld_s_mid, self.q[2], self.ld_s)
+        Or(self, "ld_s0", q_not[1], q_not[0], ld_s_mid)
+        And(self, "ld_s1", ld_s_mid, q[2], ld_s)
 
-        And(self, "ld_r0", self.q_not[2], self.q[1], self.ld_r_mid)
-        And(self, "ld_r1", self.ld_r_mid, self.q[0], self.ld_r)
+        And(self, "ld_r0", q_not[2], q[1], ld_r_mid)
+        And(self, "ld_r1", ld_r_mid, q[0], ld_r)
 
-        And(self, "sabA0", self.q[1], self.q[0], self.sabA)
+        And(self, "sabA0", q[1], q[0], sabA)
 
-        Xor(self, "sum/inc0", self.q[1], self.q[0], self.sum_inc)
+        Xor(self, "sum/inc0", q[1], q[0], sum_inc)
 
-        And(self, "ld_root0", self.q[2], self.q[1], self.ld_root_mid)
-        And(self, "ld_root1", self.ld_root_mid, self.q[0], self.ld_root)
+        And(self, "ld_root0", q[2], q[1], ld_root_mid)
+        And(self, "ld_root1", ld_root_mid, q[0], ld_root)
 
-        And(self, "fin0", self.q_not[2], self.q_not[1], self.fin_mid)
-        And(self, "fin1", self.fin_mid, self.q_not[0], self.fin)
-
+        And(self, "fin0", q_not[2], q_not[1], fin_mid)
+        And(self, "fin1", fin_mid, q_not[0], fin)
 
 sys = HWSystem()
 
@@ -235,23 +234,38 @@ Constant(sys, "Inicio", 1, inicio)
 proc = ProcUnit(sys, "UP", inic_rs, ld_s, ld_r, sabA, sum_inc, ld_root, X, root, c)
 ctrl = CtrlUnit(sys, "UC", c, inicio, inic_rs, ld_s, ld_r, sabA, sum_inc, ld_root, fin)
 
-Scope(sys, "state", ctrl.current_state)
-Scope(sys, "root", root)
-Scope(sys, "S", proc.s2Mux)
-Scope(sys, "R", proc.r2Mux)
-
 #py4hw.debug.printHierarchyWithValues(sys)
 
+waveform = {'signal': [
+  {'name': 'CK', 'wave': 'P'},
+  {'name': 'state', 'wave': 'x', 'data': []},
+  {'name': 'root', 'wave': 'x', 'data': []},
+  {'name': 'S', 'wave': 'x', 'data': []},
+  {'name': 'R', 'wave': 'x', 'data': []},
+],
+ "head":{
+   "text": 'Diagrama',
+   "tock": 0,
+ }
+}
 
-print('RESET')
-print("----------------")
 sim = sys.getSimulator()
-print()
 
-i = 1
+val = [ctrl.current_state.get, root.get, proc.s2Mux.get, proc.r2Mux.get]
+
 while root.get() == 0:
-  print(f"CLK {i}")
-  print("----------------")
   sim.clk(1)
-  print()
-  i+=1
+
+  waveform["signal"][0]["wave"] += "."
+  for x, wave in enumerate(waveform["signal"][1:]):
+    if len(wave["data"]) > 0 and wave["data"][-1] == val[x]():
+      wave["wave"] += "."
+    else:
+      wave["wave"] += "2"
+      wave["data"].append(val[x]())
+
+waveform["signal"][0]["wave"] += "."
+for wave in waveform["signal"][1:]:
+  wave["wave"] += "x"
+
+nbwavedrom.draw(waveform) # Only works in Notebook form

@@ -19,13 +19,13 @@ class SumInc(Logic):
         self.sel = self.addIn("sum/inc", sel)
         self.r = self.addOut("r", r)
         
-        self.one = Wire(self, "one", 1)
-        self.muxOut = Wire(self, "muxOut", b.getWidth())
+        one = Wire(self, "one", 1)
+        muxOut = Wire(self, "muxOut", b.getWidth())
 
-        Constant(self, "1", 1, self.one)
+        Constant(self, "1", 1, one)
 
-        self.mux = Mux2(self, "mux", sel, self.one, b, self.muxOut)
-        self.add = Add(self, "add", a, self.muxOut, r)
+        self.mux = Mux2(self, "mux", sel, one, b, muxOut)
+        self.add = Add(self, "add", a, muxOut, r)
 
 class LEQ(Logic):
     """
@@ -41,12 +41,12 @@ class LEQ(Logic):
         self.b = self.addIn("b", b)
         self.c = self.addOut("c", c)
         
-        self.dummy = Wire(self, "", 1)
-        self.eq = Wire(self, "equal", 1)
-        self.lt = Wire(self, "less", 1)
+        dummy = Wire(self, "", 1)
+        eq = Wire(self, "equal", 1)
+        lt = Wire(self, "less", 1)
     
-        Comparator(self, "comparator", a, b, self.dummy, self.eq, self.lt)
-        Or(self, "or", self.eq, self.lt, c)
+        Comparator(self, "comparator", a, b, dummy, eq, lt)
+        Or(self, "or", eq, lt, c)
 
 
 sys = HWSystem()

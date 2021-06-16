@@ -1,9 +1,45 @@
 # -*- coding: utf-8 -*-
 from py4hw.base import *
 from py4hw.logic import *
-from py4hw.storage import RegSR
+from py4hw.storage import Reg
 from py4hw.simulation import Simulator
+from math import log2
 import py4hw.debug
+
+class RegSR(Logic):
+    """
+    This is a D flip flop + Set/Reset feature
+    """
+
+    def __init__(self, parent, name:str, d:Wire, e:Wire, q:Wire, s:Wire, r:Wire, sVal:int = 0):
+        super().__init__(parent, name)
+        self.d = self.addIn("d", d)
+        self.e = self.addIn("e", e)
+        self.q = self.addOut("q", q)
+        self.s = self.addIn("s", s)
+        self.r = self.addIn("r", r)
+        self.value = 0
+        
+        if (sVal > 0 and d.getWidth() < int(log2(sVal))+1):
+            raise Exception('Invalid set value')
+
+        sValWire = Wire(self, "setValue", 1)
+        zero = Wire(self, "zero", 1)
+        muxToMux = Wire(self, "muxToMux", self.d.getWidth())
+        muxToReg = Wire(self, "muxToReg", self.d.getWidth())
+        orWire = Wire(self, "orWire", 1)
+        eWire = Wire(self, "enable", 1)
+
+        Constant(self, "setValue", sVal, sValWire)
+        Constant(self, "0", 0, zero)
+    
+        self.muxS = Mux2(self, "muxS", s, d, sValWire, muxToMux)
+        self.muxR = Mux2(self, "muxr", r, muxToMux, zero, muxToReg)
+
+        Or(self, "or0", s, r, orWire)
+        Or(self, "or1", orWire, e, eWire)
+
+        self.reg = Reg(self, "reg", muxToReg, eWire, q)
 
 sys = HWSystem()
 
